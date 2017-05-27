@@ -1,6 +1,8 @@
 import sqlite3
 from tf.fabric import Fabric
 
+### NB Todo: don't assume that mapping dict to keys/values will produce the same order (assumption runs throughout)
+
 TF = Fabric(locations='../text-fabric-data', modules='hebrew/etcbc4c')
 api = TF.load('''
 	book chapter verse
@@ -86,6 +88,8 @@ def nullifyNaAndEmptyAndUnknown(list_to_reduce):
 def wordData(n):
 	r = {
 		"wid": n,
+		"g_word_utf8": F.g_word_utf8.v(n),
+		"trailer_utf8": F.trailer_utf8.v(n),
 		"tricons": F.lex_utf8.v(n).replace('=', '').replace('/','').replace('[',''),
 		"sdbh": F.sdbh.v(n),
 		"lex": F.lex.v(n),
@@ -112,10 +116,6 @@ def wordData(n):
 	}
 	return nullifyNaAndEmptyAndUnknown(r);
 
-
-
-### CLAUSE DATA ###
-
 def treeData(n):
 	r = {
 		"wid": n,
@@ -129,7 +129,8 @@ def treeData(n):
 	return r
 
 
-### BUILD TABLES ###
+
+### GATHER DATA ###
 
 print("\nGathering node data:")
 
@@ -140,70 +141,59 @@ for n in F.otype.s('word'):
 	tree_rows.append(treeData(n))
 	if len(word_rows) % 50000 == 0:
 		print(" |", len(word_rows), "rows processed")
+	# if len(word_rows) > 10:
+	# 	break
 
 print(" |", len(word_rows), " rows processed")
 print(" - DONE\n")
 
 
+
 ### EXPORT ###
 
 db = sqlite3.connect(output_filename)
-db.executescript('''
-DROP TABLE IF EXISTS WordData;
-CREATE TABLE WordData (
-  wid INT PRIMARY KEY,
-  tricons TEXT,
-  sdbh TEXT,
-  lex TEXT,
-  voc_utf8 TEXT,
-  lxxlexeme TEXT,
-  sp TEXT,
-  ps TEXT,
-  nu TEXT,
-  gn TEXT,
-  vt TEXT,
-  vs TEXT,
-  st TEXT,
-  is_definite TEXT,
-  g_prs_utf8 TEXT,
-  g_uvf_utf8 TEXT,
-  g_cons_utf8 TEXT,
-  prs_nu TEXT,
-  prs_gn TEXT,
-  prs_ps TEXT,
-  accent TEXT,
-  accent_quality TEXT,
-  has_suffix TEXT,
-  gloss TEXT
+
+def dictToColumnData(d, primary_key, nullable):
+	def extra(key, value):
+		if type(value) is int:
+			typeinfo = "INT"
+		else:
+			typeinfo = "TEXT"
+		if not nullable:
+			typeinfo = typeinfo + " NOT NULL"
+		typeinfo = typeinfo + " PRIMARY KEY" if key is primary_key else typeinfo
+		return typeinfo
+	return map(lambda k: k + " " + extra(k, d[k]), d.keys())
+
+def createTable(table_name, sample_row, primary_key, nullable=True):
+	print("Creating table:", table_name)
+	sqlCreateTable = '''
+DROP TABLE IF EXISTS {0};
+CREATE TABLE {0} (
+  {1}
 );
-''')
-db.executescript('''
-DROP TABLE IF EXISTS TreeData;
-CREATE TABLE TreeData (
-  wid INT PRIMARY KEY,
-  phrase_atom INT NOT NULL,
-  phrase INT NOT NULL,
-  clause_atom INT NOT NULL,
-  clause INT NOT NULL,
-  sentence INT NOT NULL,
-  rid INT NOT NULL
-);
-''')
+'''.format(table_name, ",\n  ".join(dictToColumnData(sample_row, primary_key, nullable)))
+	print(sqlCreateTable)
+	db.executescript(sqlCreateTable)
+createTable("WordData", word_rows[0], 'wid')
+createTable("TreeData", tree_rows[0], 'wid', False)
 
 
 print("Writing to sqlite:", output_filename)
 
-print(" - writing word data")
-def formattedWordRows(word_rows):
-	return map(lambda r: (r["wid"],r["tricons"],r["sdbh"],r["lex"],r["voc_utf8"],r["lxxlexeme"],r["sp"],r["ps"],r["nu"],r["gn"],r["vt"],r["vs"],r["st"],r["is_definite"],r["g_prs_utf8"],r["g_uvf_utf8"],r["g_cons_utf8"],r["prs_nu"],r["prs_gn"],r["prs_ps"],r["accent"],r["accent_quality"],r["has_suffix"],r["gloss"]), word_rows)
-db.executemany("INSERT INTO `WordData` (`wid`, `tricons`, `sdbh`, `lex`, `voc_utf8`, `lxxlexeme`, `sp`, `ps`, `nu`, `gn`, `vt`, `vs`, `st`, `is_definite`, `g_prs_utf8`, `g_uvf_utf8`, `g_cons_utf8`, `prs_nu`, `prs_gn`, `prs_ps`, `accent`, `accent_quality`, `has_suffix`, `gloss`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", formattedWordRows(word_rows))
-db.commit()
+def insertData(table, rows):
+	data = {
+		"table_name": table,
+		"column_names": ",".join( map(lambda k: "`" + k + "`", rows[0].keys()) ),
+		"question_marks": ",".join(["?"] * len(rows[0].keys()))
+	}
+	sql_query = "INSERT INTO `{table_name}` ({column_names}) VALUES ({question_marks})".format(**data)
+	print(" - writing ", table)
+	db.executemany(sql_query, [tuple(d.values()) for d in rows])
+	db.commit()
 
-print(" - writing tree data")
-def formattedTreeRows(tree_rows):
-	return map(lambda r: (r["wid"],r["phrase_atom"],r["phrase"],r["clause_atom"],r["clause"],r["sentence"],r["rid"]), tree_rows)
-db.executemany("INSERT INTO `TreeData` (`wid`,`phrase_atom`,`phrase`,`clause_atom`,`clause`,`sentence`,`rid`) VALUES (?,?,?,?,?,?,?)", formattedTreeRows(tree_rows))
-db.commit()
+insertData("WordData", word_rows)
+insertData("TreeData", tree_rows)
 
 
 db.close()
