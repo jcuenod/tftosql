@@ -70,7 +70,7 @@ def passageToIndex(passage):
 		print(passage)
 		print(passage[0])
 		raise IndexError('Try using the right kind of book names bro')
-	return book_to_index[passage[0]] * 1000000 + int(passage[1]) * 1000 + int(passage[2])
+	return book_to_index[passage[0]] * 10000000 + int(passage[1]) * 1000 + int(passage[2])
 
 
 ### WORD DATA ###
@@ -163,7 +163,7 @@ def dictToColumnData(d, primary_key, nullable):
 			typeinfo = "TEXT"
 		if not nullable:
 			typeinfo = typeinfo + " NOT NULL"
-		typeinfo = typeinfo + " PRIMARY KEY" if key is primary_key else typeinfo
+		typeinfo = typeinfo + " PRIMARY KEY" if key == primary_key else typeinfo
 		return typeinfo
 	return map(lambda k: k + " " + extra(k, d[k]), d.keys())
 
