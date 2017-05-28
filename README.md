@@ -1,6 +1,6 @@
 # tftosql
 
-Convert text-fabric-data to sqlite for rapid querying
+Convert text-fabric-data to sqlite for rapid querying. You will need `text-fabric` and `text-fabric-data`. You can use `pip install` to get the former, the latter can be cloned from <https://github.com/ETCBC/text-fabric-data> (make sure that it shares a parent directory with `tftosql`).
 
 To generate the actual sqlite3 file:
 
