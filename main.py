@@ -117,6 +117,7 @@ def wordData(n):
 	return nullifyNaAndEmptyAndUnknown(r);
 
 def treeData(n):
+	section = T.sectionFromNode(n)
 	r = {
 		"wid": n,
 		"phrase_atom": L.u(n, otype="phrase_atom")[0],
@@ -124,7 +125,8 @@ def treeData(n):
 		"clause_atom": L.u(n, otype="clause_atom")[0],
 		"clause": L.u(n, otype="clause")[0],
 		"sentence": L.u(n, otype="sentence")[0],
-		"rid": passageToIndex(T.sectionFromNode(n))
+		"rid": passageToIndex(section),
+		"book": book_to_index[section[0]]
 	}
 	return r
 
